@@ -1,6 +1,6 @@
 # arXiv Daily Paper ​​Summarizer
 
-🤖 Automatically fetch the latest papers from arXiv in specific fields, generate Chinese/English/Bilingual summaries using DeepSeek AI, and deliver them to your inbox daily.
+Automatically fetch the latest papers from arXiv, deliver their original abstracts by email, and optionally add Chinese translations powered by DeepSeek AI.
 
 [中文文档](./README_CN.md) | English
 
@@ -10,7 +10,8 @@
 - 🎯 **Category Balance**: Ensures representation from each research area
 - 🏆 **Quality Filtering**: Scores papers based on multiple quality indicators
 - 🔄 **Intelligent Deduplication**: Detects and removes similar papers automatically
-- 🤖 **AI Summaries**: Generates high-quality Chinese summaries using DeepSeek V3.2
+- 📋 **Original Abstracts**: Always includes the complete abstract supplied by arXiv
+- 🌐 **Optional Chinese Translation**: Adds a faithful translation when DeepSeek is configured; failures never block email delivery
 - 📧 **Email Delivery**: Beautiful HTML email format with date notices and quality badges
 - ⏰ **Automated Scheduling**: Runs automatically via GitHub Actions
 - 🆓 **Completely Free**: All services within free tier limits
@@ -32,7 +33,7 @@ Add the following secrets:
 
 | Secret Name | Description | Example |
 |-------------|-------------|---------|
-| `DEEPSEEK_API_KEY` | DeepSeek API key | `ms-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` |
+| `DEEPSEEK_API_KEY` | DeepSeek API key (optional, for Chinese translation only) | `ms-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` |
 | `SENDER_EMAIL` | Sender email address | `your-email@gmail.com` |
 | `SENDER_PASSWORD` | Email app-specific password | `abcd efgh ijkl mnop` |
 | `RECEIVER_EMAIL` | Recipient email address | `receiver@example.com` |
@@ -149,6 +150,7 @@ arxiv-daily-summarizer/
 pip install -r requirements.txt
 
 # 2. Set environment variables (Windows PowerShell)
+# Optional; omit it to send original arXiv abstracts only
 $env:DEEPSEEK_API_KEY="your-api-key"
 $env:SENDER_EMAIL="your-email@gmail.com"
 $env:SENDER_PASSWORD="your-password"
@@ -244,6 +246,6 @@ MIT License
 - ✅ Full English documentation
 
 ### v1.0 - Initial Release
-- Basic paper fetching and summarization
+- Basic paper fetching and original-abstract delivery
 - Email delivery functionality
 - GitHub Actions automation

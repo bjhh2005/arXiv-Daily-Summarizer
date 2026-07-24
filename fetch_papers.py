@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from openai import OpenAI
 from collections import Counter, defaultdict
 import re
+from html import escape
 from difflib import SequenceMatcher
 
 # ========== Configuration ==========
@@ -18,7 +19,7 @@ MIN_PAPERS_PER_CATEGORY = 1  # Minimum papers per category to ensure balance
 
 # Language configuration
 # Supported values: 'zh' (Chinese), 'en' (English), 'both' (Bilingual)
-EMAIL_LANGUAGE = os.environ.get('EMAIL_LANGUAGE', 'zh')  # Default to Chinese
+EMAIL_LANGUAGE = os.environ.get('EMAIL_LANGUAGE') or 'zh'  # Default to Chinese
 
 # DeepSeek API configuration
 DEEPSEEK_API_KEY = os.environ.get('DEEPSEEK_API_KEY')
@@ -29,8 +30,8 @@ DEEPSEEK_MODEL = 'deepseek-ai/DeepSeek-V3.2-Exp'
 SENDER_EMAIL = os.environ.get('SENDER_EMAIL')
 SENDER_PASSWORD = os.environ.get('SENDER_PASSWORD')
 RECEIVER_EMAIL = os.environ.get('RECEIVER_EMAIL')
-SMTP_SERVER = os.environ.get('SMTP_SERVER', 'smtp.gmail.com')
-SMTP_PORT = int(os.environ.get('SMTP_PORT', '587'))
+SMTP_SERVER = os.environ.get('SMTP_SERVER') or 'smtp.gmail.com'
+SMTP_PORT = int(os.environ.get('SMTP_PORT') or '587')
 
 # Quality filtering thresholds
 MIN_ABSTRACT_LENGTH = 100  # Minimum abstract length (characters)
@@ -57,10 +58,11 @@ TEXT_TEMPLATES = {
         'published': '发布日期',
         'categories': '分类',
         'quality_score': '质量评分',
-        'ai_summary': 'AI 摘要',
+        'original_abstract': 'arXiv 原始摘要',
+        'chinese_translation': '中文翻译',
         'view_pdf': '查看 PDF',
         'footer_auto': '本邮件由 arXiv Daily Summarizer 自动生成',
-        'footer_powered': '由 DeepSeek AI 提供摘要服务'
+        'footer_powered': '中文翻译由 DeepSeek AI 提供'
     },
     'en': {
         'title': 'arXiv Daily Paper Digest',
@@ -81,10 +83,11 @@ TEXT_TEMPLATES = {
         'published': 'Published',
         'categories': 'Categories',
         'quality_score': 'Quality Score',
-        'ai_summary': 'AI Summary',
+        'original_abstract': 'Original arXiv Abstract',
+        'chinese_translation': 'Chinese Translation',
         'view_pdf': 'View PDF',
         'footer_auto': 'Generated automatically by arXiv Daily Summarizer',
-        'footer_powered': 'Powered by DeepSeek AI'
+        'footer_powered': 'Chinese translations powered by DeepSeek AI'
     }
 }
 
@@ -371,106 +374,51 @@ def analyze_paper_dates(papers):
     return date_stats
 
 
-def summarize_paper(paper, language='zh'):
+def translate_abstract_to_chinese(paper):
     """
-    Generate paper summary using DeepSeek AI
+    Translate the original arXiv abstract into Chinese when AI is configured.
     
     Args:
         paper: Dictionary containing paper information
-        language: 'zh' for Chinese, 'en' for English, 'both' for bilingual
-        
     Returns:
-        dict: AI-generated summaries {'zh': str, 'en': str} or single language str
+        str or None: Chinese translation, or None when translation is unavailable
     """
-    print(f"\n🤖 Generating AI summary for:")
+    if not DEEPSEEK_API_KEY:
+        return None
+
+    print(f"\n🌐 Translating abstract into Chinese:")
     print(f"   {paper['title'][:70]}...")
-    
-    summaries = {}
-    
-    # Define prompts for each language
-    prompts = {
-        'zh': f"""请用中文总结以下学术论文，包括以下几个方面：
-1. 研究背景和动机（1-2句话）
-2. 主要方法和创新点（2-3句话）
-3. 实验结果和结论（1-2句话）
-4. 潜在应用价值（1句话）
+
+    prompt = f"""请将下面的 arXiv 论文摘要忠实、完整地翻译成中文。
+不要总结、删减、扩写或添加原文中没有的信息；保留专业术语、数字和结论。
+只输出译文，不要添加标题或说明。
 
 论文标题：{paper['title']}
 
-论文摘要：
-{paper['abstract']}
+原始摘要：
+{paper['abstract']}"""
 
-请用简洁专业的语言总结，适合快速阅读理解。""",
-        'en': f"""Please summarize the following academic paper in English, including these aspects:
-1. Research background and motivation (1-2 sentences)
-2. Main methods and innovations (2-3 sentences)
-3. Experimental results and conclusions (1-2 sentences)
-4. Potential application value (1 sentence)
-
-Paper title: {paper['title']}
-
-Paper abstract:
-{paper['abstract']}
-
-Please use concise professional language suitable for quick reading."""
-    }
-    
-    # Determine which languages to generate
-    langs_to_generate = ['zh', 'en'] if language == 'both' else [language]
-    
     try:
         client = OpenAI(
             base_url=DEEPSEEK_BASE_URL,
             api_key=DEEPSEEK_API_KEY,
         )
-        
-        for lang in langs_to_generate:
-            print(f"   Generating {'Chinese' if lang == 'zh' else 'English'} summary...")
-            
-            response = client.chat.completions.create(
-                model=DEEPSEEK_MODEL,
-                messages=[
-                    {
-                        'role': 'user',
-                        'content': prompts[lang]
-                    }
-                ],
-                stream=True
-            )
-            
-            # Collect streaming response
-            summary = ""
-            done_reasoning = False
-            for chunk in response:
-                reasoning_chunk = chunk.choices[0].delta.reasoning_content or ''
-                answer_chunk = chunk.choices[0].delta.content or ''
-                
-                if reasoning_chunk:
-                    continue  # Skip reasoning process
-                elif answer_chunk:
-                    if not done_reasoning:
-                        done_reasoning = True
-                    summary += answer_chunk
-            
-            summaries[lang] = summary.strip()
-            print(f"   ✅ {'Chinese' if lang == 'zh' else 'English'} summary completed")
-        
-        # Return format based on language mode
-        if language == 'both':
-            return summaries
-        else:
-            return summaries[language]
+
+        response = client.chat.completions.create(
+            model=DEEPSEEK_MODEL,
+            messages=[{'role': 'user', 'content': prompt}],
+            stream=False
+        )
+        translation = (response.choices[0].message.content or '').strip()
+        if not translation:
+            raise ValueError("AI returned an empty translation")
+
+        print("   ✅ Chinese translation completed")
+        return translation
     
     except Exception as e:
-        print(f"   ❌ AI summary generation failed: {str(e)}")
-        error_msg = {
-            'zh': "摘要生成失败，请直接查看原文。",
-            'en': "Summary generation failed. Please read the original paper."
-        }
-        if language == 'both':
-            return error_msg
-        else:
-            return error_msg.get(language, error_msg['en'])
+        print(f"   ⚠️ Chinese translation unavailable; keeping original abstract: {str(e)}")
+        return None
 
 
 def generate_date_notice(date_stats, papers, language='zh'):
@@ -547,12 +495,12 @@ def generate_date_notice(date_stats, papers, language='zh'):
     return html
 
 
-def generate_email_content(papers_with_summaries, language='zh'):
+def generate_email_content(papers_with_abstracts, language='zh'):
     """
     Generate HTML email content
     
     Args:
-        papers_with_summaries: List of dictionaries containing papers and summaries
+        papers_with_abstracts: List containing papers and optional translations
         language: 'zh', 'en', or 'both' for bilingual
         
     Returns:
@@ -560,7 +508,7 @@ def generate_email_content(papers_with_summaries, language='zh'):
     """
     today = datetime.now().strftime('%Y-%m-%d')
     
-    papers = [item['paper'] for item in papers_with_summaries]
+    papers = [item['paper'] for item in papers_with_abstracts]
     date_stats = analyze_paper_dates(papers)
     
     # Get text template (use 'en' for bilingual mode header)
@@ -714,9 +662,11 @@ def generate_email_content(papers_with_summaries, language='zh'):
     today_date = now.date()
     yesterday_date = (now - timedelta(days=1)).date()
     
-    for i, item in enumerate(papers_with_summaries, 1):
+    has_translation = any(item.get('translation') for item in papers_with_abstracts)
+
+    for i, item in enumerate(papers_with_abstracts, 1):
         paper = item['paper']
-        summary = item['summary']
+        translation = item.get('translation')
         
         # Add date badge
         paper_date = paper['published'].date()
@@ -739,21 +689,15 @@ def generate_email_content(papers_with_summaries, language='zh'):
             for cat in paper['categories'][:3]
         ])
         
-        # Handle bilingual summaries
-        if language == 'both' and isinstance(summary, dict):
-            summary_html = f"""
-                <div style="margin-bottom: 15px;">
-                    <div style="font-weight: bold; color: #667eea; margin-bottom: 8px;">🇨🇳 中文摘要</div>
-                    <div>{summary.get('zh', '').replace(chr(10), '<br>')}</div>
-                </div>
-                <div>
-                    <div style="font-weight: bold; color: #667eea; margin-bottom: 8px;">🇬🇧 English Summary</div>
-                    <div>{summary.get('en', '').replace(chr(10), '<br>')}</div>
-                </div>
+        abstract_html = escape(paper.get('abstract', '')).replace(chr(10), '<br>')
+        translation_html = ''
+        if translation:
+            translation_html = f"""
+            <div class="summary">
+                <div class="summary-title">🌐 {txt['chinese_translation']}</div>
+                <div>{escape(translation).replace(chr(10), '<br>')}</div>
+            </div>
             """
-        else:
-            summary_text = summary if isinstance(summary, str) else summary.get(language, '')
-            summary_html = summary_text.replace(chr(10), '<br>')
         
         html += f"""
         <div class="paper">
@@ -775,9 +719,11 @@ def generate_email_content(papers_with_summaries, language='zh'):
             </div>
             
             <div class="summary">
-                <div class="summary-title">🤖 {txt['ai_summary']}</div>
-                <div>{summary_html}</div>
+                <div class="summary-title">📋 {txt['original_abstract']}</div>
+                <div>{abstract_html}</div>
             </div>
+
+            {translation_html}
             
             <div class="links">
                 <a href="{paper['pdf_url']}" class="link-button">📄 {txt['view_pdf']}</a>
@@ -788,7 +734,7 @@ def generate_email_content(papers_with_summaries, language='zh'):
     html += f"""
         <div class="footer">
             <p>{txt['footer_auto']}</p>
-            <p>{txt['footer_powered']}</p>
+            {f"<p>{txt['footer_powered']}</p>" if has_translation else ""}
         </div>
     </body>
     </html>
@@ -839,7 +785,7 @@ def main():
     print("=" * 60)
     
     # Check required environment variables
-    required_vars = ['DEEPSEEK_API_KEY', 'SENDER_EMAIL', 'SENDER_PASSWORD', 'RECEIVER_EMAIL']
+    required_vars = ['SENDER_EMAIL', 'SENDER_PASSWORD', 'RECEIVER_EMAIL']
     missing_vars = [var for var in required_vars if not os.environ.get(var)]
     
     if missing_vars:
@@ -862,25 +808,28 @@ def main():
         print(f"   Yesterday: {date_stats['yesterday']} papers")
         print(f"   Older: {date_stats['older']} papers")
         
-        # Step 3: Generate AI summaries for each paper
+        # Step 3: Keep original abstracts and optionally translate them
         print("\n" + "=" * 60)
-        print("🤖 Generating AI Summaries")
+        print("📋 Preparing Original Abstracts")
         print("=" * 60)
+
+        if not DEEPSEEK_API_KEY:
+            print("ℹ️ DEEPSEEK_API_KEY is not set; sending original arXiv abstracts only")
         
-        papers_with_summaries = []
+        papers_with_abstracts = []
         for i, paper in enumerate(papers, 1):
             print(f"\n[{i}/{len(papers)}]")
-            summary = summarize_paper(paper, EMAIL_LANGUAGE)
-            papers_with_summaries.append({
+            translation = translate_abstract_to_chinese(paper)
+            papers_with_abstracts.append({
                 'paper': paper,
-                'summary': summary
+                'translation': translation
             })
         
         # Step 4: Generate email content
         print("\n" + "=" * 60)
         print("📧 Generating Email Content")
         print("=" * 60)
-        html_content = generate_email_content(papers_with_summaries, EMAIL_LANGUAGE)
+        html_content = generate_email_content(papers_with_abstracts, EMAIL_LANGUAGE)
         
         # Step 5: Send email
         today = datetime.now().strftime('%Y-%m-%d')

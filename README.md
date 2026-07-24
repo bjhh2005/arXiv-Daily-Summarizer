@@ -1,6 +1,6 @@
 # arXiv 每日论文推送
 
-🤖 每天自动从 arXiv 获取你指定领域的最新论文，使用 DeepSeek AI 生成中文/英文/双语摘要，并推送到你的邮箱。
+每天自动从 arXiv 获取你指定领域的最新论文，将 arXiv 原始摘要推送到邮箱，并可选使用 DeepSeek AI 提供中文翻译。
 
 中文文档 | [English](./README_EN.md)
 
@@ -10,7 +10,8 @@
 - 🎯 **领域平衡**：确保每个研究领域都有代表性论文
 - 🏆 **质量筛选**：基于多个质量指标对论文评分
 - 🔄 **智能去重**：自动检测并移除相似论文
-- 🤖 **AI 智能摘要**：使用 DeepSeek V3.2 生成高质量中文摘要
+- 📋 **原始摘要**：邮件始终包含 arXiv 提供的完整摘要
+- 🌐 **可选中文翻译**：配置 DeepSeek API 后附加中文直译，失败不会影响邮件发送
 - 📧 **邮件推送**：精美的 HTML 邮件格式，包含日期提醒和质量徽章
 - ⏰ **自动定时**：通过 GitHub Actions 自动运行
 - 🆓 **完全免费**：所有服务都在免费额度内
@@ -30,7 +31,7 @@ cd arxiv-daily-summarizer
 
 | 密钥名称 | 说明 | 示例 |
 |---------|------|------|
-| `DEEPSEEK_API_KEY` | DeepSeek API 密钥 | `ms-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` |
+| `DEEPSEEK_API_KEY` | DeepSeek API 密钥（可选，仅用于中文翻译） | `ms-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` |
 | `SENDER_EMAIL` | 发件人邮箱地址 | `your-email@gmail.com` |
 | `SENDER_PASSWORD` | 邮箱应用专用密码 | `abcd efgh ijkl mnop` |
 | `RECEIVER_EMAIL` | 收件人邮箱地址 | `receiver@example.com` |
@@ -38,7 +39,7 @@ cd arxiv-daily-summarizer
 | `SMTP_PORT` | SMTP 端口（可选） | `587` |
 
 #### Api 配置说明
-本项目使用的是 ModelScope 的免费 api，你也可以访问官网[魔塔社区](https://www.modelscope.cn/)申请，或者换成你自己的 api 。
+本项目使用 ModelScope API。未配置此密钥时，邮件仍会正常发送，只包含 arXiv 原始摘要；配置后会尝试附加中文翻译。
 
 #### 📮 邮箱配置说明
 
@@ -150,6 +151,7 @@ arxiv-daily-summarizer/
 pip install -r requirements.txt
 
 # 2. 设置环境变量（Windows PowerShell）
+# 可选；不设置时仅发送 arXiv 原摘要
 $env:DEEPSEEK_API_KEY="your-api-key"
 $env:SENDER_EMAIL="your-email@gmail.com"
 $env:SENDER_PASSWORD="your-password"
@@ -248,6 +250,6 @@ MIT License
 - ✅ 完整英文文档
 
 ### v1.0 - 初始版本
-- 基础论文获取和摘要生成
+- 基础论文获取和原始摘要推送
 - 邮件推送功能
 - GitHub Actions 自动化

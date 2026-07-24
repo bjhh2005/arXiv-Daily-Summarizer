@@ -2,7 +2,9 @@
 
 ## Configuration
 
-The system supports three language modes for emails:
+The setting controls the language of the email title and interface labels. Every
+mode includes the original arXiv abstract. If `DEEPSEEK_API_KEY` is configured,
+the email also includes an optional Chinese translation.
 
 ### Setting Language
 
@@ -15,7 +17,7 @@ export EMAIL_LANGUAGE=zh
 # English only
 export EMAIL_LANGUAGE=en
 
-# Bilingual (both Chinese and English)
+# Legacy bilingual value (uses English interface labels)
 export EMAIL_LANGUAGE=both
 ```
 
@@ -27,18 +29,17 @@ Or in GitHub Secrets, add:
 
 ### 1. Chinese Mode (`zh`) - DEFAULT
 - Email title, labels, and UI in Chinese
-- AI summary in Chinese
+- Original arXiv abstract and, when available, a Chinese translation
 - This is the default if EMAIL_LANGUAGE is not set
 
 ### 2. English Mode (`en`)
 - Email title, labels, and UI in English
-- AI summary in English
+- Original arXiv abstract and, when available, a Chinese translation
 
 ### 3. Bilingual Mode (`both`)
 - Email title and labels in English (primary)
-- AI summary in BOTH Chinese AND English
-- Chinese summary appears first, then English summary
-- Useful for bilingual readers
+- Behaves like English mode for interface labels
+- Retained for backward compatibility
 
 ## Examples
 
@@ -46,26 +47,24 @@ Or in GitHub Secrets, add:
 ```
 标题: arXiv 每日论文推送
 日期提醒: 论文日期提醒
-摘要: AI 摘要 (中文)
+摘要: arXiv 原始摘要
+翻译（可选）: 中文翻译
 ```
 
 ### English Email
 ```
 Title: arXiv Daily Paper Digest
 Date Notice: Date Notice
-Summary: AI Summary (English)
+Summary: Original arXiv Abstract
+Translation (optional): Chinese Translation
 ```
 
 ### Bilingual Email
 ```
 Title: arXiv Daily Paper Digest
 Date Notice: Date Notice
-Summary: 
-  🇨🇳 中文摘要
-  [Chinese summary text]
-  
-  🇬🇧 English Summary
-  [English summary text]
+Summary: Original arXiv Abstract
+Translation (optional): Chinese Translation
 ```
 
 ## Testing Locally
@@ -86,6 +85,6 @@ python fetch_papers.py
 
 ## Note
 
-- Bilingual mode takes longer as it generates TWO summaries per paper
-- Bilingual mode may use more API quota
+- AI translation is optional and is skipped when `DEEPSEEK_API_KEY` is absent
+- Translation failures fall back to the original abstract without blocking email
 - Default is Chinese (`zh`) if not specified
