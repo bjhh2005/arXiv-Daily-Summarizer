@@ -31,15 +31,18 @@ cd arxiv-daily-summarizer
 
 | 密钥名称 | 说明 | 示例 |
 |---------|------|------|
-| `DEEPSEEK_API_KEY` | DeepSeek API 密钥（可选，仅用于中文翻译） | `ms-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` |
+| `DEEPSEEK_API_KEY` | DeepSeek 官方 API Key（可选，仅用于中文翻译） | `sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` |
 | `SENDER_EMAIL` | 发件人邮箱地址 | `your-email@gmail.com` |
 | `SENDER_PASSWORD` | 邮箱应用专用密码 | `abcd efgh ijkl mnop` |
 | `RECEIVER_EMAIL` | 收件人邮箱地址 | `receiver@example.com` |
 | `SMTP_SERVER` | SMTP 服务器地址（可选） | `smtp.gmail.com` |
 | `SMTP_PORT` | SMTP 端口（可选） | `587` |
 
-#### Api 配置说明
-本项目使用 ModelScope API。未配置此密钥时，邮件仍会正常发送，只包含 arXiv 原始摘要；配置后会尝试附加中文翻译。
+#### API 配置说明
+
+本项目直接调用 DeepSeek 官方 API，默认使用 `https://api.deepseek.com` 和 `deepseek-chat` 模型。请在 [DeepSeek 开放平台](https://platform.deepseek.com/api_keys) 创建 API Key，并将它保存为 GitHub Actions Secret `DEEPSEEK_API_KEY`。不要填写 ModelScope Token。
+
+未配置此密钥时，邮件仍会正常发送，只包含 arXiv 原始摘要；配置后会尝试附加中文翻译。API Key 对应的 DeepSeek 账户需要有可用余额。
 
 #### 📮 邮箱配置说明
 
@@ -197,7 +200,7 @@ python test_arxiv.py
 ## 📊 使用限制
 
 - **GitHub Actions**：每月 2000 分钟免费额度（本项目每天约消耗 2-3 分钟）
-- **DeepSeek API**：ModelScope 提供的免费额度
+- **DeepSeek API**：按 DeepSeek 开放平台当前价格和账户余额计费
 - **邮件发送**：取决于你的邮箱服务商限制
 
 ## ❓ 常见问题

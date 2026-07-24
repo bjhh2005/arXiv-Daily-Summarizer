@@ -33,12 +33,18 @@ Add the following secrets:
 
 | Secret Name | Description | Example |
 |-------------|-------------|---------|
-| `DEEPSEEK_API_KEY` | DeepSeek API key (optional, for Chinese translation only) | `ms-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx` |
+| `DEEPSEEK_API_KEY` | Official DeepSeek API key (optional, for Chinese translation only) | `sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` |
 | `SENDER_EMAIL` | Sender email address | `your-email@gmail.com` |
 | `SENDER_PASSWORD` | Email app-specific password | `abcd efgh ijkl mnop` |
 | `RECEIVER_EMAIL` | Recipient email address | `receiver@example.com` |
 | `SMTP_SERVER` | SMTP server address (optional) | `smtp.gmail.com` |
 | `SMTP_PORT` | SMTP port (optional) | `587` |
+
+#### API Configuration
+
+This project calls the official DeepSeek API directly, using `https://api.deepseek.com` and the `deepseek-chat` model by default. Create an API key on the [DeepSeek Platform](https://platform.deepseek.com/api_keys) and store it as the GitHub Actions secret `DEEPSEEK_API_KEY`. Do not use a ModelScope token.
+
+Without this key, emails are still delivered with the original arXiv abstracts only. When the key is configured, the app attempts to add Chinese translations. The associated DeepSeek account must have available credit.
 
 #### 📮 Email Configuration Guide
 
@@ -193,7 +199,7 @@ The system detects similar papers by:
 ## 📊 Usage Limits
 
 - **GitHub Actions**: 2000 minutes/month free (this project uses ~2-3 minutes/day)
-- **DeepSeek API**: Free tier provided by ModelScope
+- **DeepSeek API**: Billed according to current DeepSeek Platform pricing and account credit
 - **Email**: Depends on your email provider's limits
 
 ## ❓ FAQ
