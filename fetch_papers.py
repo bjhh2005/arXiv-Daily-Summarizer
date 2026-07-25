@@ -1,4 +1,5 @@
 import os
+import json
 import smtplib
 import arxiv
 from email.mime.text import MIMEText
@@ -9,6 +10,8 @@ from collections import Counter, defaultdict
 import re
 from html import escape
 from difflib import SequenceMatcher
+from pathlib import Path
+from urllib.parse import urlparse
 
 # ========== Configuration ==========
 
@@ -16,6 +19,11 @@ from difflib import SequenceMatcher
 CATEGORIES = ['cs.AI', 'cs.CV', 'cs.LG']  # Research areas of interest
 MAX_RESULTS = 5  # Number of papers to send daily
 MIN_PAPERS_PER_CATEGORY = 1  # Minimum papers per category to ensure balance
+MAX_PAPER_AGE_YEARS = 3  # Only send papers published within the last three years
+MAX_RESULTS_TO_SCAN_PER_CATEGORY = 5000
+PUSH_HISTORY_FILE = Path(
+    os.environ.get('PUSH_HISTORY_FILE') or Path(__file__).with_name('sent_papers.json')
+)
 
 # Language configuration
 # Supported values: 'zh' (Chinese), 'en' (English), 'both' (Bilingual)
@@ -47,8 +55,8 @@ TEXT_TEMPLATES = {
         'days_ago': '天前',
         'published_today': '<strong>{count} 篇</strong>是今天发布',
         'published_yesterday': '<strong>{count} 篇</strong>是昨天发布',
-        # 'published_older_single': '<strong>{count} 篇</strong>是 {days} 天前发布（可能已读过）',
-        'published_older_multi': '<strong>{count} 篇</strong>是 2 天及更早前发布（可能已读过）',
+        'published_older_single': '<strong>{count} 篇</strong>是 {days} 天前发布',
+        'published_older_multi': '<strong>{count} 篇</strong>是 2 天及更早前发布',
         'notice_text': '本次推送的 {total} 篇论文中，{parts}。',
         'new_today': '今日新发布',
         'yesterday_label': '昨日发布',
@@ -72,8 +80,8 @@ TEXT_TEMPLATES = {
         'days_ago': 'days ago',
         'published_today': '<strong>{count} papers</strong> published today',
         'published_yesterday': '<strong>{count} papers</strong> published yesterday',
-        # 'published_older_single': '<strong>{count} paper</strong> published {days} days ago (may have been read)',
-        'published_older_multi': '<strong>{count} papers</strong> published 2+ days ago (may have been read)',
+        'published_older_single': '<strong>{count} paper</strong> published {days} days ago',
+        'published_older_multi': '<strong>{count} papers</strong> published 2+ days ago',
         'notice_text': 'Of the {total} papers in this digest, {parts}.',
         'new_today': 'NEW TODAY',
         'yesterday_label': 'YESTERDAY',
@@ -90,6 +98,90 @@ TEXT_TEMPLATES = {
         'footer_powered': 'Chinese translations powered by DeepSeek AI'
     }
 }
+
+
+def canonical_arxiv_id(entry_id):
+    """Return a stable arXiv ID, ignoring URL form and revision suffix."""
+    value = (entry_id or '').strip()
+    if not value:
+        return ''
+
+    if '://' in value:
+        value = urlparse(value).path
+    value = value.strip('/')
+    if value.startswith('abs/'):
+        value = value[4:]
+    elif value.lower().startswith('arxiv:'):
+        value = value[6:]
+    return re.sub(r'v\d+$', '', value, flags=re.IGNORECASE)
+
+
+def publication_cutoff(now, years=MAX_PAPER_AGE_YEARS):
+    """Calculate a calendar-year cutoff, including a safe leap-day fallback."""
+    try:
+        return now.replace(year=now.year - years)
+    except ValueError:
+        return now.replace(year=now.year - years, day=28)
+
+
+def is_within_publication_window(published, now=None):
+    """Check whether a publication is no older than the configured limit."""
+    if now is None:
+        now = datetime.now(published.tzinfo)
+    elif published.tzinfo is not None and now.tzinfo is None:
+        now = now.replace(tzinfo=published.tzinfo)
+    elif published.tzinfo is None and now.tzinfo is not None:
+        published = published.replace(tzinfo=now.tzinfo)
+    return publication_cutoff(now) <= published <= now
+
+
+def load_push_history(history_file=PUSH_HISTORY_FILE):
+    """Load previously sent papers, keyed by canonical arXiv ID."""
+    history_file = Path(history_file)
+    if not history_file.exists():
+        return {}
+
+    try:
+        with history_file.open('r', encoding='utf-8') as file:
+            data = json.load(file)
+        records = data.get('papers', []) if isinstance(data, dict) else data
+        return {
+            canonical_arxiv_id(record.get('arxiv_id') or record.get('entry_id')): record
+            for record in records
+            if isinstance(record, dict)
+            and canonical_arxiv_id(record.get('arxiv_id') or record.get('entry_id'))
+        }
+    except (OSError, json.JSONDecodeError) as error:
+        raise RuntimeError(f'Unable to read push history {history_file}: {error}') from error
+
+
+def record_sent_papers(papers, history_file=PUSH_HISTORY_FILE, sent_at=None):
+    """Persist sent papers atomically after a successful delivery."""
+    history_file = Path(history_file)
+    history = load_push_history(history_file)
+    sent_at = sent_at or datetime.now().astimezone()
+
+    for paper in papers:
+        arxiv_id = canonical_arxiv_id(paper.get('entry_id'))
+        if not arxiv_id:
+            continue
+        history[arxiv_id] = {
+            'arxiv_id': arxiv_id,
+            'title': paper.get('title', ''),
+            'published': paper['published'].isoformat(),
+            'sent_at': sent_at.isoformat(),
+        }
+
+    payload = {'version': 1, 'papers': list(history.values())}
+    history_file.parent.mkdir(parents=True, exist_ok=True)
+    temporary_file = history_file.with_suffix(history_file.suffix + '.tmp')
+    try:
+        with temporary_file.open('w', encoding='utf-8', newline='\n') as file:
+            json.dump(payload, file, ensure_ascii=False, indent=2)
+            file.write('\n')
+        os.replace(temporary_file, history_file)
+    except OSError as error:
+        raise RuntimeError(f'Unable to write push history {history_file}: {error}') from error
 
 
 def calculate_paper_quality_score(paper):
@@ -225,7 +317,7 @@ def remove_duplicate_papers(papers):
     return filtered_papers
 
 
-def get_latest_papers():
+def get_latest_papers(sent_paper_ids=None):
     """
     Fetch latest papers from arXiv with quality filtering and deduplication
     
@@ -235,9 +327,13 @@ def get_latest_papers():
     print(f"🔍 Searching for latest papers on arXiv...")
     print(f"📚 Categories: {', '.join(CATEGORIES)}")
     
+    sent_paper_ids = {
+        canonical_arxiv_id(entry_id) for entry_id in (sent_paper_ids or set())
+    }
     client = arxiv.Client()
     papers_by_category = defaultdict(list)
     seen_ids = set()
+    target_candidates_per_category = max(MAX_RESULTS * 3, MIN_PAPERS_PER_CATEGORY)
     
     # Step 1: Fetch papers from each category separately
     for category in CATEGORIES:
@@ -246,17 +342,27 @@ def get_latest_papers():
         try:
             search = arxiv.Search(
                 query=f'cat:{category}',
-                max_results=MAX_RESULTS * 2,  # Fetch more for better selection
+                # Iteration stops as soon as enough eligible unseen papers are found.
+                max_results=MAX_RESULTS_TO_SCAN_PER_CATEGORY,
                 sort_by=arxiv.SortCriterion.SubmittedDate,
                 sort_order=arxiv.SortOrder.Descending
             )
             
-            results = list(client.results(search))
-            print(f"  API returned {len(results)} papers")
-            
-            for result in results:
-                if result.entry_id not in seen_ids:
-                    seen_ids.add(result.entry_id)
+            scanned_count = 0
+            skipped_sent_count = 0
+            for result in client.results(search):
+                scanned_count += 1
+                arxiv_id = canonical_arxiv_id(result.entry_id)
+
+                # Results are newest first, so reaching the cutoff means later
+                # results are also outside the allowed publication window.
+                if not is_within_publication_window(result.published):
+                    break
+                if arxiv_id in sent_paper_ids:
+                    skipped_sent_count += 1
+                    continue
+                if arxiv_id not in seen_ids:
+                    seen_ids.add(arxiv_id)
                     
                     abstract_text = result.summary if hasattr(result, 'summary') else ''
                     
@@ -277,6 +383,14 @@ def get_latest_papers():
                     papers_by_category[category].append(paper)
                     
                     print(f"  ✓ {result.title[:60]}... (score: {paper['quality_score']:.1f})")
+
+                    if len(papers_by_category[category]) >= target_candidates_per_category:
+                        break
+
+            print(
+                f"  Scanned {scanned_count} papers; skipped "
+                f"{skipped_sent_count} already sent"
+            )
             
             # Sort papers in this category by quality score
             papers_by_category[category].sort(
@@ -795,7 +909,9 @@ def main():
     
     try:
         # Step 1: Fetch latest papers with quality filtering
-        papers = get_latest_papers()
+        push_history = load_push_history()
+        print(f"📚 Loaded {len(push_history)} previously sent paper records")
+        papers = get_latest_papers(set(push_history))
         
         if not papers:
             print("\n⚠️ No papers found, exiting")
@@ -834,7 +950,11 @@ def main():
         # Step 5: Send email
         today = datetime.now().strftime('%Y-%m-%d')
         subject = f"📚 arXiv Daily Paper Digest - {today}"
-        send_email(subject, html_content)
+        if not send_email(subject, html_content):
+            raise RuntimeError('Email delivery failed; push history was not updated')
+
+        record_sent_papers(papers)
+        print(f"📝 Recorded {len(papers)} newly sent papers in {PUSH_HISTORY_FILE}")
         
         print("\n" + "=" * 60)
         print("✅ Execution completed successfully!")

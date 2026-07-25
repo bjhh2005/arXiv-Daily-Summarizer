@@ -8,6 +8,13 @@ on:
   # Allow manual workflow trigger
   workflow_dispatch:
 
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-arxiv-paper-digest
+  cancel-in-progress: false
+
 jobs:
   fetch-and-send:
     runs-on: ubuntu-latest
@@ -41,3 +48,17 @@ jobs:
           SMTP_PORT: ${{ secrets.SMTP_PORT }}
         run: |
           python fetch_papers.py
+
+      # Persist the successful delivery history for the next daily run.
+      - name: 📝 Save Push History
+        run: |
+          if git diff --quiet -- sent_papers.json; then
+            echo "No new push history to save"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add sent_papers.json
+          git commit -m "chore: update arXiv push history"
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"

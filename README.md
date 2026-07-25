@@ -100,6 +100,7 @@ CATEGORIES = ['cs.AI', 'cs.CV', 'cs.CL']  # 可以添加其他分类
 
 ```python
 MAX_RESULTS = 5  # 每天推送的论文数量
+MAX_PAPER_AGE_YEARS = 3  # 只推送最近三年内发布的论文
 ```
 
 ### 修改领域平衡策略
@@ -190,6 +191,10 @@ python test_arxiv.py
 - 使用序列匹配算法计算标题相似度
 - 移除相似度 >85% 的重复论文
 - 发现重复时保留质量分数更高的版本
+- 使用 arXiv ID 将成功推送的论文记录在 `sent_papers.json`
+- 每次选文前排除历史记录，论文修订版本也不会重复推送
+
+GitHub Actions 会在邮件发送成功后自动提交更新后的 `sent_papers.json`，以便后续每日任务继续使用同一份记录。邮件发送失败时不会写入记录。
 
 ## ⚖️ 领域平衡算法
 

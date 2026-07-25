@@ -102,6 +102,7 @@ Edit the `MAX_RESULTS` variable in `fetch_papers.py`:
 
 ```python
 MAX_RESULTS = 5  # Number of papers to send daily
+MAX_PAPER_AGE_YEARS = 3  # Only send papers published within the last three years
 ```
 
 ### Modify Category Balance
@@ -189,6 +190,10 @@ The system detects similar papers by:
 - Calculating title similarity using sequence matching
 - Removing duplicates with >85% similarity
 - Keeping the higher-quality version when duplicates are found
+- Recording successfully delivered arXiv IDs in `sent_papers.json`
+- Excluding previously delivered papers, including later revisions, from future digests
+
+After a successful email delivery, GitHub Actions commits the updated `sent_papers.json` so future daily runs share the same history. Failed deliveries are not recorded.
 
 ## ⚖️ Category Balance Algorithm
 
