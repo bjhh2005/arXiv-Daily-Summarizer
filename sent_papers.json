@@ -1,4 +1,35 @@
 {
   "version": 1,
-  "papers": []
+  "papers": [
+    {
+      "arxiv_id": "2607.21577",
+      "title": "Synthetic data generation framework for quality control automation in gravure printing",
+      "published": "2026-07-23T17:55:21+00:00",
+      "sent_at": "2026-07-25T10:57:42.611044+00:00"
+    },
+    {
+      "arxiv_id": "2607.21553",
+      "title": "SANA-Video 2.0: Hybrid Linear Attention with Attention Residuals for Efficient Video Generation",
+      "published": "2026-07-23T17:36:05+00:00",
+      "sent_at": "2026-07-25T10:57:42.611044+00:00"
+    },
+    {
+      "arxiv_id": "2607.21485",
+      "title": "Recurrent Sinusoidal INRs for Efficient High-Fidelity Representation",
+      "published": "2026-07-23T16:26:51+00:00",
+      "sent_at": "2026-07-25T10:57:42.611044+00:00"
+    },
+    {
+      "arxiv_id": "2607.21446",
+      "title": "KroQuant: Kronecker-Structured Block Transforms for Efficient Post-Training Quantization of Diffusion Transformers",
+      "published": "2026-07-23T15:52:20+00:00",
+      "sent_at": "2026-07-25T10:57:42.611044+00:00"
+    },
+    {
+      "arxiv_id": "2607.21444",
+      "title": "Climate-resilient electric vehicle charging infrastructure for sustainable cities: An interpretable causal-ensemble framework for preventive maintenance and low-carbon mobility",
+      "published": "2026-07-23T15:51:08+00:00",
+      "sent_at": "2026-07-25T10:57:42.611044+00:00"
+    }
+  ]
 }
