@@ -3,7 +3,7 @@ name: Daily arXiv Paper Digest
 on:
   schedule:
     - cron: '* * * * *'
-    workflow_dispatch:
+  workflow_dispatch:
 
 permissions:
   contents: write
